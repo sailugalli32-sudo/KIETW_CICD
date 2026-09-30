@@ -1,0 +1,49 @@
+# .github/workflows/cicd.yml
+name: CI/CD Pipeline  # Name of the workflow
+
+on:  # Triggers for the workflow
+  push:
+    branches: [ main ]  # Run on pushes to main branch
+  pull_request:
+    branches: [ main ]  # Run on pull requests to main
+
+jobs:
+  test:  # Job for running unit tests
+    runs-on: ubuntu-latest  # Use latest Ubuntu runner
+
+    steps:
+    - name: Checkout code  # Step to clone the repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python  # Step to install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'  # Specify Python version
+
+    - name: Install dependencies  # Step to install libraries
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run tests  # Step to execute pytest
+      run: pytest test_app.py
+
+  deploy:  # Job for deployment, depends on test job
+    needs: test  # Only run if test succeeds
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'  # Only on pushes to main
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to Render  # Step to trigger Render deployment via API
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}  # Use GitHub secret
+        RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}  # Use GitHub secret
+      run: |
+        curl -X POST \
+        -H "Authorization: Bearer $RENDER_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"clearCache": false}' \
+        https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys
