@@ -1,43 +1,32 @@
-# app.py
-from flask import Flask, request, jsonify
-import joblib
-import numpy as np
+# test_app.py
+import pytest
+from app import app  # Import the Flask app from app.py
 
-# Load the trained model from the saved file
-model = joblib.load("iris_model.pkl")
+@pytest.fixture
+def client():
+    app.config["TESTING"] = True  # Enable testing mode
+    with app.test_client() as client:  # Create a test client for simulating requests
+        yield client
 
-# Initialize the Flask application
-app = Flask(__name__)
+def test_home_endpoint(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"Iris Flower Classifier" in response.data  # Check for HTML title
 
-@app.route("/")
-def home():
-    return "Iris Classifier API is Running!"  # Simple message to confirm the server is active
 
-@app.route("/predict", methods=["POST"])
-def predict():
-    try:
-        # Extract JSON data from the incoming POST request
-        data = request.get_json(force=True)
 
-        # Validate the input: Check if 'features' key exists and contains exactly 4 numerical values
-        if "features" not in data or len(data["features"]) != 4:
-            return jsonify({"error": "Exactly 4 numerical features are required"}), 400
+def test_predict_endpoint_valid_input(client):
+    response = client.post(
+        "/predict",  # Simulate a POST request to the predict route
+        json={"features": [5.1, 3.5, 1.4, 0.2]}  # Valid input for setosa
+    )
+    assert response.status_code == 200  # Check if status is OK
+    assert response.json == {"prediction": "setosa"}  # Check predicted class
 
-        # Convert the features list to a NumPy array and reshape it to (1, 4) for single-sample prediction
-        features = np.array(data["features"], dtype=float).reshape(1, -1)
-
-        # Use the model to predict the class (0, 1, or 2)
-        prediction = model.predict(features)[0]
-
-        # Map the numerical prediction to the corresponding species name
-        classes = ["setosa", "versicolor", "virginica"]
-        result = {"prediction": classes[prediction]}
-
-        # Return the result as a JSON response with HTTP status 200 (OK)
-        return jsonify(result)
-    except Exception as e:
-        # Handle any errors (e.g., invalid data types) and return an error message with HTTP status 400 (Bad Request)
-        return jsonify({"error": str(e)}), 400
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)  # Run the server on all interfaces (for external access) on port 5000
+def test_predict_endpoint_invalid_input(client):
+    response = client.post(
+        "/predict",
+        json={"features": [5.1, 3.5, 1.4]}  # Invalid: only 3 features
+    )
+    assert response.status_code == 400  # Check if status is Bad Request
+    assert "error" in response.json  # Check for error key in response

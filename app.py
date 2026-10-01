@@ -1,84 +1,44 @@
+# app.py
+from flask import Flask, request, jsonify, render_template
 from flask import Flask, request, jsonify
 import joblib
 import numpy as np
-import os
 
-# Load trained model
+# Load the trained model from the saved file
 model = joblib.load("iris_model.pkl")
 
-# Initialize Flask
+# Initialize the Flask application
 app = Flask(__name__)
 
-
-# Home route
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
-    return """
-    <h1>Iris Classifier API is Running!</h1>
-    <p>Use POST /predict to make a prediction.</p>
-    <p>Required JSON format:</p>
-    <pre>
-{
-    "features": [5.1, 3.5, 1.4, 0.2]
-}
-    </pre>
-    """
+    return render_template("index.html")  # Render the HTML file from templates/
 
-
-# Prediction route
-@app.route("/predict", methods=["GET", "POST"])
+@app.route("/predict", methods=["POST"])
 def predict():
-
-    # If opened directly in browser
-    if request.method == "GET":
-        return """
-        <h2>Iris Prediction API</h2>
-        <p>This endpoint requires a POST request.</p>
-        <p>Send 4 flower measurements using JSON.</p>
-        """
-
     try:
+        # Extract JSON data from the incoming POST request
         data = request.get_json(force=True)
-
-        if "features" not in data:
-            return jsonify({
-                "error": "Please provide 'features'"
-            }), 400
-
-        if len(data["features"]) != 4:
-            return jsonify({
-                "error": "Exactly 4 numerical features are required"
-            }), 400
-
-        features = np.array(
-            data["features"],
-            dtype=float
-        ).reshape(1, -1)
-
+        
+        # Validate the input: Check if 'features' key exists and contains exactly 4 numerical values
+        if "features" not in data or len(data["features"]) != 4:
+            return jsonify({"error": "Exactly 4 numerical features are required"}), 400
+        
+        # Convert the features list to a NumPy array and reshape it to (1, 4) for single-sample prediction
+        features = np.array(data["features"], dtype=float).reshape(1, -1)
+        
+        # Use the model to predict the class (0, 1, or 2)
         prediction = model.predict(features)[0]
-
-        classes = [
-            "setosa",
-            "versicolor",
-            "virginica"
-        ]
-
-        result = {
-            "prediction": classes[int(prediction)]
-        }
-
+        
+        # Map the numerical prediction to the corresponding species name
+        classes = ["setosa", "versicolor", "virginica"]
+        result = {"prediction": classes[prediction]}
+        
+        # Return the result as a JSON response with HTTP status 200 (OK)
         return jsonify(result)
-
     except Exception as e:
-        return jsonify({
-            "error": str(e)
-        }), 400
+        # Handle any errors (e.g., invalid data types) and return an error message with HTTP status 400 (Bad Request)
+        return jsonify({"error": str(e)}), 400
 
-
-# Render server
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(
-        host="0.0.0.0",
-        port=port
-    )
+    app.run(host="0.0.0.0", port=5000)  # Run the server on all interfaces (for external access) on port 5000
